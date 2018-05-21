@@ -41,6 +41,8 @@
   #include "../../../feature/bedlevel/bedlevel.h"
   #include "../../../libs/least_squares_fit.h"
 
+  #include <Arduino_FreeRTOS.h>
+
   #include <math.h>
 
   #define UBL_G29_P31
