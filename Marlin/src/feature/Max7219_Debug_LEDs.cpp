@@ -48,6 +48,9 @@
 #include "../Marlin.h"
 #include "../HAL/Delay.h"
 
+#include <Arduino_FreeRTOS.h>
+#include <queue.h>
+
 static uint8_t LEDs[8] = { 0 };
 
 #ifndef MAX7219_ROTATE
@@ -89,6 +92,62 @@ static uint8_t LEDs[8] = { 0 };
   // Delay for 0.1875µs (16MHz AVR) or 0.15µs (20MHz AVR)
   #define SIG_DELAY() DELAY_NS(188)
 #endif
+
+extern QueueHandle_t Max7219_Queue;
+struct LED_Msg incoming_led_msg;
+#define MSG incoming_led_msg
+
+void Max7219_Do_Cmd(uint8_t msg, uint8_t col, uint8_t row, uint32_t val ) {
+  struct LED_Msg out_going_led_msg;
+
+  out_going_led_msg.operation = msg;
+  out_going_led_msg.col       = col;
+  out_going_led_msg.row       = row;
+  out_going_led_msg.val       = val;
+
+  while (pdPASS != xQueueSendToBack(Max7219_Queue, &out_going_led_msg, 100)) { /* nada */ }
+}
+
+TaskFunction_t Max7219_Cmd_Processor(void *ptr) {
+
+  while (Max7219_Queue == NULL)    // wait until the message queue is set up to look for stuff to process
+    vTaskDelay(50);
+
+  for (;;) {
+
+    while (pdPASS != xQueueReceive( Max7219_Queue, &incoming_led_msg, 2000)) { /* nada */ }
+
+    switch (MSG.operation) {
+      case LED_NOP:          break;
+      case LED_INIT:         Max7219_init();
+                             break;
+      case LED_LOAD_REGS:    Max7219_register_setup();
+                             break;
+      case LED_ON:           Max7219_LED_On(MSG.col, MSG.row);
+                             break;
+      case LED_OFF:          Max7219_LED_Off(MSG.col, MSG.row);
+                             break;
+      case LED_TOGGLE:       Max7219_LED_Toggle(MSG.col, MSG.row);
+                             break;
+      case LED_CLEAR_MATRIX: Max7219_Clear();
+                             break;
+      case LED_CLEAR_ROW:    Max7219_Clear_Row(MSG.row);
+                             break;
+      case LED_CLEAR_COLUMN: Max7219_Clear_Column(MSG.col);
+                             break;
+      case LED_SET_ROW:      Max7219_Set_Row(MSG.row, (uint8_t) MSG.val);
+                             break;
+      case LED_SET_2_ROWS:   Max7219_Set_2_Rows(MSG.row, (uint16_t) MSG.val);
+                             break;
+      case LED_SET_4_ROWS:   Max7219_Set_4_Rows(MSG.row, MSG.val);
+                             break;
+      case LED_SET_COLUMN:   Max7219_Set_Column(MSG.col, (uint8_t) MSG.val);
+                             break;
+      case LED_IDLE_TASK:    Max7219_idle_tasks();
+                             break;
+    }
+  }
+}
 
 void Max7219_PutByte(uint8_t data) {
   #ifndef CPU_32_BIT
@@ -385,6 +444,9 @@ inline void Max7219_Quantity16(const uint8_t y, const uint8_t ov, const uint8_t 
 }
 
 void Max7219_idle_tasks() {
+
+  return;  // Temporary!!!
+
   #define MAX7219_USE_HEAD (defined(MAX7219_DEBUG_PLANNER_HEAD) || defined(MAX7219_DEBUG_PLANNER_QUEUE))
   #define MAX7219_USE_TAIL (defined(MAX7219_DEBUG_PLANNER_TAIL) || defined(MAX7219_DEBUG_PLANNER_QUEUE))
   #if MAX7219_USE_HEAD || MAX7219_USE_TAIL
