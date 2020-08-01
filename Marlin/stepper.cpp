@@ -1743,6 +1743,10 @@ uint32_t Stepper::stepper_block_phase_isr() {
           if (active_extruder != last_moved_extruder) LA_current_adv_steps = 0;
         #endif
 
+        // The pressure dissipates during moves.
+        if (current_block->millimeters > 1 && current_block->steps.e > 0)
+          LA_current_adv_steps = 0;
+
         if ((LA_use_advance_lead = current_block->use_advance_lead)) {
           LA_final_adv_steps = current_block->final_adv_steps;
           LA_max_adv_steps = current_block->max_adv_steps;
